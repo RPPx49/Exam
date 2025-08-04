@@ -1,0 +1,814 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ระบบฝึกทำข้อสอบออนไลน์</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script type="module">
+        // Firebase configuration
+        import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.0/firebase-app.js';
+        import { getDatabase, ref, push, set, get, child } from 'https://www.gstatic.com/firebasejs/10.7.0/firebase-database.js';
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyCxs-l7BTMJB0LPIKiSig5suB6bSgvL3NQ",
+            authDomain: "exam-ecd1b.firebaseapp.com",
+            databaseURL: "https://exam-ecd1b-default-rtdb.firebaseio.com",
+            projectId: "exam-ecd1b",
+            storageBucket: "exam-ecd1b.firebasestorage.app",
+            messagingSenderId: "835098407689",
+            appId: "1:835098407689:web:b73352d440bf51758059d8",
+            measurementId: "G-KFZ5R4FV16"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const database = getDatabase(app);
+        window.database = database;
+        window.dbRef = ref;
+        window.dbPush = push;
+        window.dbSet = set;
+        window.dbGet = get;
+        window.dbChild = child;
+    </script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap');
+        body { font-family: 'Sarabun', sans-serif; }
+    </style>
+</head>
+<body class="bg-gradient-to-br from-blue-50 to-indigo-100 min-h-screen">
+    <!-- Student Dashboard -->
+    <div id="studentDashboard" class="container mx-auto px-4 py-8">
+        <div class="text-center mb-8">
+            <h1 class="text-4xl font-bold text-gray-800 mb-4">🎓 ระบบฝึกทำข้อสอบออนไลน์</h1>
+            <p class="text-gray-600 text-lg">เลือกบทเรียนที่ต้องการทดสอบความรู้</p>
+        </div>
+
+        <div class="max-w-4xl mx-auto">
+            <div class="bg-white rounded-xl shadow-lg p-6 mb-6">
+                <h2 class="text-2xl font-semibold text-gray-800 mb-4">📚 เลือกบทเรียน</h2>
+                <div class="mb-4">
+                    <label class="flex items-center space-x-2 mb-3">
+                        <input type="checkbox" id="selectAllLessons" onchange="toggleSelectAll()" class="w-4 h-4 text-blue-600 rounded focus:ring-blue-500">
+                        <span class="font-medium text-gray-700">เลือกทั้งหมด</span>
+                    </label>
+                </div>
+                <div id="lessonsList" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
+                    <!-- Lessons will be loaded here -->
+                </div>
+                <div class="text-center">
+                    <button id="startMixedExamBtn" onclick="startMixedExam()" class="bg-green-600 hover:bg-green-700 text-white px-8 py-3 rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed" disabled>
+                        🎯 เริ่มสอบรวม
+                    </button>
+                </div>
+            </div>
+
+            <div class="text-center">
+                <button onclick="showAdminLogin()" class="bg-gray-600 hover:bg-gray-700 text-white px-6 py-2 rounded-lg transition-colors">
+                    🔧 เข้าสู่ระบบแอดมิน
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Admin Login Modal -->
+    <div id="adminLoginModal" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-50">
+        <div class="bg-white rounded-xl p-8 max-w-md w-full mx-4">
+            <h3 class="text-2xl font-bold text-gray-800 mb-6 text-center">🔐 เข้าสู่ระบบแอดมิน</h3>
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-gray-700 font-medium mb-2">ชื่อผู้ใช้:</label>
+                    <input type="text" id="adminUsername" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent" placeholder="Admin">
+                </div>
+                <div>
+                    <label class="block text-gray-700 font-medium mb-2">รหัสผ่าน:</label>
+                    <input type="password" id="adminPassword" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent" placeholder="RPPx">
+                </div>
+                <div class="flex space-x-4">
+                    <button onclick="adminLogin()" class="flex-1 bg-blue-600 hover:bg-blue-700 text-white py-2 rounded-lg transition-colors">เข้าสู่ระบบ</button>
+                    <button onclick="hideAdminLogin()" class="flex-1 bg-gray-400 hover:bg-gray-500 text-white py-2 rounded-lg transition-colors">ยกเลิก</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Admin Dashboard -->
+    <div id="adminDashboard" class="hidden container mx-auto px-4 py-8">
+        <div class="flex justify-between items-center mb-8">
+            <h1 class="text-3xl font-bold text-gray-800">🛠️ แดชบอร์ดแอดมิน</h1>
+            <button onclick="logout()" class="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-lg transition-colors">ออกจากระบบ</button>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            <!-- Add Lesson -->
+            <div class="bg-white rounded-xl shadow-lg p-6">
+                <h2 class="text-xl font-semibold text-gray-800 mb-4">➕ เพิ่มบทเรียนใหม่</h2>
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-gray-700 font-medium mb-2">ชื่อบทเรียน:</label>
+                        <input type="text" id="lessonTitle" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent" placeholder="เช่น คณิตศาสตร์ ม.1">
+                    </div>
+                    <button onclick="addLesson()" class="w-full bg-green-600 hover:bg-green-700 text-white py-2 rounded-lg transition-colors">สร้างบทเรียน</button>
+                </div>
+            </div>
+
+            <!-- Add Question -->
+            <div class="bg-white rounded-xl shadow-lg p-6">
+                <h2 class="text-xl font-semibold text-gray-800 mb-4">❓ เพิ่มโจทย์</h2>
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-gray-700 font-medium mb-2">เลือกบทเรียน:</label>
+                        <select id="lessonSelect" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                            <option value="">เลือกบทเรียน</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-gray-700 font-medium mb-2">โจทย์และตัวเลือก (สามารถเพิ่มหลายข้อพร้อมกัน):</label>
+                        <textarea id="questionText" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent h-48" placeholder="1. โจทย์ข้อที่ 1&#10;ก. ตัวเลือก 1&#10;ข. ตัวเลือก 2&#10;ค. ตัวเลือก 3&#10;ง. ตัวเลือก 4&#10;&#10;2. โจทย์ข้อที่ 2&#10;ก. ตัวเลือก 1&#10;ข. ตัวเลือก 2&#10;ค. ตัวเลือก 3&#10;ง. ตัวเลือก 4"></textarea>
+                        <p class="text-sm text-gray-500 mt-2">💡 เคล็ดลับ: แยกแต่ละข้อด้วยบรรทัดว่าง สามารถเพิ่มหลายข้อพร้อมกันได้</p>
+                    </div>
+                    <button onclick="parseAndAddQuestions()" class="w-full bg-blue-600 hover:bg-blue-700 text-white py-2 rounded-lg transition-colors">เพิ่มโจทย์</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Questions Management -->
+        <div id="questionsManagement" class="mt-8 bg-white rounded-xl shadow-lg p-6">
+            <h2 class="text-xl font-semibold text-gray-800 mb-4">📝 จัดการโจทย์</h2>
+            <div class="mb-4">
+                <label class="block text-gray-700 font-medium mb-2">เลือกบทเรียนที่ต้องการจัดการ:</label>
+                <select id="manageLessonSelect" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent" onchange="loadSelectedLessonQuestions()">
+                    <option value="">เลือกบทเรียน</option>
+                </select>
+            </div>
+            <div id="questionsList"></div>
+        </div>
+    </div>
+
+    <!-- Exam Interface -->
+    <div id="examInterface" class="hidden container mx-auto px-4 py-8">
+        <div class="max-w-4xl mx-auto">
+            <div class="bg-white rounded-xl shadow-lg p-6">
+                <div class="flex justify-between items-center mb-6">
+                    <h2 id="examTitle" class="text-2xl font-bold text-gray-800"></h2>
+                    <div class="text-gray-600">
+                        <span id="currentQuestion">1</span> / <span id="totalQuestions">10</span>
+                    </div>
+                </div>
+
+                <div id="questionContent" class="mb-8">
+                    <!-- Question content will be loaded here -->
+                </div>
+
+                <div class="flex justify-between">
+                    <button id="prevBtn" onclick="previousQuestion()" class="bg-gray-500 hover:bg-gray-600 text-white px-6 py-2 rounded-lg transition-colors disabled:opacity-50" disabled>⬅️ ก่อนหน้า</button>
+                    <button id="nextBtn" onclick="nextQuestion()" class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg transition-colors">ถัดไป ➡️</button>
+                    <button id="finishBtn" onclick="finishExam()" class="hidden bg-green-600 hover:bg-green-700 text-white px-6 py-2 rounded-lg transition-colors">เสร็จสิ้น ✅</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Results Modal -->
+    <div id="resultsModal" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-50">
+        <div class="bg-white rounded-xl p-8 max-w-2xl w-full mx-4 max-h-96 overflow-y-auto">
+            <h3 class="text-2xl font-bold text-gray-800 mb-6 text-center">📊 ผลการสอบ</h3>
+            <div id="resultsContent"></div>
+            <div class="text-center mt-6">
+                <button onclick="backToDashboard()" class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg transition-colors">กลับหน้าหลัก</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let currentExam = null;
+        let currentQuestionIndex = 0;
+        let userAnswers = [];
+        let questions = [];
+
+        // Initialize app
+        window.addEventListener('load', function() {
+            loadLessons();
+        });
+
+        // Show admin login modal
+        function showAdminLogin() {
+            document.getElementById('adminLoginModal').classList.remove('hidden');
+            document.getElementById('adminLoginModal').classList.add('flex');
+        }
+
+        // Hide admin login modal
+        function hideAdminLogin() {
+            document.getElementById('adminLoginModal').classList.add('hidden');
+            document.getElementById('adminLoginModal').classList.remove('flex');
+            document.getElementById('adminUsername').value = '';
+            document.getElementById('adminPassword').value = '';
+        }
+
+        // Admin login
+        function adminLogin() {
+            const username = document.getElementById('adminUsername').value;
+            const password = document.getElementById('adminPassword').value;
+
+            if (username === 'Admin' && password === 'RPPx') {
+                hideAdminLogin();
+                document.getElementById('studentDashboard').classList.add('hidden');
+                document.getElementById('adminDashboard').classList.remove('hidden');
+                loadLessonsForAdmin();
+            } else {
+                alert('ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง');
+            }
+        }
+
+        // Logout
+        function logout() {
+            document.getElementById('adminDashboard').classList.add('hidden');
+            document.getElementById('studentDashboard').classList.remove('hidden');
+        }
+
+        // Load lessons for student dashboard
+        async function loadLessons() {
+            try {
+                const snapshot = await window.dbGet(window.dbChild(window.dbRef(window.database), 'lessons'));
+                const lessons = snapshot.val() || {};
+                
+                const lessonsList = document.getElementById('lessonsList');
+                lessonsList.innerHTML = '';
+
+                Object.keys(lessons).forEach(lessonId => {
+                    const lesson = lessons[lessonId];
+                    const questionCount = lesson.questions ? Object.keys(lesson.questions).length : 0;
+                    
+                    const lessonCard = document.createElement('div');
+                    lessonCard.className = 'bg-gradient-to-r from-blue-500 to-purple-600 text-white p-6 rounded-lg transition-shadow';
+                    lessonCard.innerHTML = `
+                        <div class="flex items-start space-x-3 mb-4">
+                            <input type="checkbox" id="lesson_${lessonId}" value="${lessonId}" onchange="updateSelectedLessons()" class="w-5 h-5 text-white bg-transparent border-2 border-white rounded focus:ring-white focus:ring-2 mt-1">
+                            <div class="flex-1">
+                                <h3 class="text-xl font-semibold mb-2">${lesson.title}</h3>
+                                <p class="text-blue-100 mb-4">จำนวนข้อสอบ: ${questionCount} ข้อ</p>
+                            </div>
+                        </div>
+                        <button onclick="startSingleExam('${lessonId}', '${lesson.title.replace(/'/g, "\\'")}', ${questionCount})" class="w-full bg-white text-blue-600 px-4 py-2 rounded-lg font-medium hover:bg-gray-100 transition-colors">
+                            สอบเฉพาะบทนี้
+                        </button>
+                    `;
+                    lessonsList.appendChild(lessonCard);
+                });
+
+                updateSelectedLessons();
+            } catch (error) {
+                console.error('Error loading lessons:', error);
+            }
+        }
+
+        // Load lessons for admin
+        async function loadLessonsForAdmin() {
+            try {
+                const snapshot = await window.dbGet(window.dbChild(window.dbRef(window.database), 'lessons'));
+                const lessons = snapshot.val() || {};
+                
+                const lessonSelect = document.getElementById('lessonSelect');
+                const manageLessonSelect = document.getElementById('manageLessonSelect');
+                
+                lessonSelect.innerHTML = '<option value="">เลือกบทเรียน</option>';
+                manageLessonSelect.innerHTML = '<option value="">เลือกบทเรียน</option>';
+
+                Object.keys(lessons).forEach(lessonId => {
+                    const option1 = document.createElement('option');
+                    option1.value = lessonId;
+                    option1.textContent = lessons[lessonId].title;
+                    lessonSelect.appendChild(option1);
+
+                    const option2 = document.createElement('option');
+                    option2.value = lessonId;
+                    option2.textContent = lessons[lessonId].title;
+                    manageLessonSelect.appendChild(option2);
+                });
+
+                // Clear questions list initially
+                document.getElementById('questionsList').innerHTML = '<p class="text-gray-500 text-center py-8">กรุณาเลือกบทเรียนเพื่อดูโจทย์</p>';
+            } catch (error) {
+                console.error('Error loading lessons for admin:', error);
+            }
+        }
+
+        // Add new lesson
+        async function addLesson() {
+            const title = document.getElementById('lessonTitle').value.trim();
+            if (!title) {
+                alert('กรุณาใส่ชื่อบทเรียน');
+                return;
+            }
+
+            try {
+                const lessonRef = window.dbPush(window.dbRef(window.database, 'lessons'));
+                await window.dbSet(lessonRef, {
+                    title: title,
+                    createdAt: Date.now()
+                });
+
+                document.getElementById('lessonTitle').value = '';
+                alert('เพิ่มบทเรียนสำเร็จ!');
+                loadLessonsForAdmin();
+            } catch (error) {
+                console.error('Error adding lesson:', error);
+                alert('เกิดข้อผิดพลาดในการเพิ่มบทเรียน');
+            }
+        }
+
+        // Parse and add questions (multiple)
+        async function parseAndAddQuestions() {
+            const lessonId = document.getElementById('lessonSelect').value;
+            const questionText = document.getElementById('questionText').value.trim();
+
+            if (!lessonId) {
+                alert('กรุณาเลือกบทเรียน');
+                return;
+            }
+
+            if (!questionText) {
+                alert('กรุณาใส่โจทย์และตัวเลือก');
+                return;
+            }
+
+            // Split by double newlines to separate questions
+            const questionBlocks = questionText.split('\n\n').filter(block => block.trim());
+            let successCount = 0;
+            let errorCount = 0;
+
+            for (const block of questionBlocks) {
+                const lines = block.split('\n').filter(line => line.trim());
+                
+                if (lines.length < 5) {
+                    errorCount++;
+                    continue;
+                }
+
+                const question = lines[0].replace(/^\d+\.\s*/, '');
+                const choices = [];
+                
+                for (let i = 1; i < lines.length && i <= 4; i++) {
+                    const choice = lines[i].replace(/^[ก-ง]\.\s*/, '');
+                    choices.push(choice);
+                }
+
+                try {
+                    const questionRef = window.dbPush(window.dbRef(window.database, `lessons/${lessonId}/questions`));
+                    await window.dbSet(questionRef, {
+                        question: question,
+                        choices: choices,
+                        correctAnswer: 0, // Default to first choice
+                        createdAt: Date.now()
+                    });
+                    successCount++;
+                } catch (error) {
+                    console.error('Error adding question:', error);
+                    errorCount++;
+                }
+            }
+
+            document.getElementById('questionText').value = '';
+            
+            if (successCount > 0) {
+                alert(`เพิ่มโจทย์สำเร็จ ${successCount} ข้อ${errorCount > 0 ? ` (ข้อผิดพลาด ${errorCount} ข้อ)` : ''}\nกรุณาเลือกคำตอบที่ถูกต้องในส่วนจัดการโจทย์`);
+                // Refresh the selected lesson if it's the same
+                const selectedLessonId = document.getElementById('manageLessonSelect').value;
+                if (selectedLessonId === lessonId) {
+                    loadSelectedLessonQuestions();
+                }
+            } else {
+                alert('เกิดข้อผิดพลาดในการเพิ่มโจทย์ กรุณาตรวจสอบรูปแบบ');
+            }
+        }
+
+        // Load questions for selected lesson
+        async function loadSelectedLessonQuestions() {
+            const selectedLessonId = document.getElementById('manageLessonSelect').value;
+            const questionsList = document.getElementById('questionsList');
+
+            if (!selectedLessonId) {
+                questionsList.innerHTML = '<p class="text-gray-500 text-center py-8">กรุณาเลือกบทเรียนเพื่อดูโจทย์</p>';
+                return;
+            }
+
+            try {
+                const snapshot = await window.dbGet(window.dbChild(window.dbRef(window.database), `lessons/${selectedLessonId}`));
+                const lesson = snapshot.val();
+                
+                if (!lesson || !lesson.questions) {
+                    questionsList.innerHTML = '<p class="text-gray-500 text-center py-8">ยังไม่มีโจทย์ในบทเรียนนี้</p>';
+                    return;
+                }
+
+                questionsList.innerHTML = '';
+                const lessonDiv = document.createElement('div');
+                lessonDiv.className = 'space-y-4';
+
+                Object.keys(lesson.questions).forEach((questionId, index) => {
+                    const question = lesson.questions[questionId];
+                    const questionDiv = document.createElement('div');
+                    questionDiv.className = 'p-4 bg-gray-50 border border-gray-200 rounded-lg';
+                    
+                    const choicesHtml = question.choices.map((choice, choiceIndex) => {
+                        const thaiLetters = ['ก', 'ข', 'ค', 'ง'];
+                        return `<label class="flex items-center space-x-2 mb-2 cursor-pointer">
+                            <input type="radio" name="correct_${selectedLessonId}_${questionId}" value="${choiceIndex}" ${question.correctAnswer === choiceIndex ? 'checked' : ''} onchange="updateCorrectAnswer('${selectedLessonId}', '${questionId}', ${choiceIndex})">
+                            <span>${thaiLetters[choiceIndex]}. ${choice}</span>
+                        </label>`;
+                    }).join('');
+
+                    questionDiv.innerHTML = `
+                        <div class="flex justify-between items-start mb-3">
+                            <div class="flex-1">
+                                <strong class="text-gray-800">ข้อ ${index + 1}:</strong> ${question.question}
+                            </div>
+                            <button onclick="deleteQuestion('${selectedLessonId}', '${questionId}')" class="ml-4 bg-red-500 hover:bg-red-600 text-white px-3 py-1 rounded text-sm transition-colors">
+                                🗑️ ลบ
+                            </button>
+                        </div>
+                        <div class="space-y-2">
+                            <p class="text-sm font-medium text-gray-700 mb-2">เลือกคำตอบที่ถูกต้อง:</p>
+                            ${choicesHtml}
+                        </div>
+                    `;
+                    lessonDiv.appendChild(questionDiv);
+                });
+
+                questionsList.appendChild(lessonDiv);
+            } catch (error) {
+                console.error('Error loading selected lesson questions:', error);
+                questionsList.innerHTML = '<p class="text-red-500 text-center py-8">เกิดข้อผิดพลาดในการโหลดโจทย์</p>';
+            }
+        }
+
+        // Update correct answer
+        async function updateCorrectAnswer(lessonId, questionId, correctIndex) {
+            try {
+                await window.dbSet(window.dbRef(window.database, `lessons/${lessonId}/questions/${questionId}/correctAnswer`), correctIndex);
+            } catch (error) {
+                console.error('Error updating correct answer:', error);
+            }
+        }
+
+        // Delete question
+        async function deleteQuestion(lessonId, questionId) {
+            if (confirm('คุณแน่ใจหรือไม่ที่จะลบโจทย์นี้?')) {
+                try {
+                    await window.dbSet(window.dbRef(window.database, `lessons/${lessonId}/questions/${questionId}`), null);
+                    loadSelectedLessonQuestions(); // Refresh the list
+                    alert('ลบโจทย์สำเร็จ!');
+                } catch (error) {
+                    console.error('Error deleting question:', error);
+                    alert('เกิดข้อผิดพลาดในการลบโจทย์');
+                }
+            }
+        }
+
+        // Toggle select all lessons
+        function toggleSelectAll() {
+            const selectAllCheckbox = document.getElementById('selectAllLessons');
+            const lessonCheckboxes = document.querySelectorAll('input[type="checkbox"][id^="lesson_"]');
+            
+            lessonCheckboxes.forEach(checkbox => {
+                checkbox.checked = selectAllCheckbox.checked;
+            });
+            
+            updateSelectedLessons();
+        }
+
+        // Update selected lessons count and button state
+        function updateSelectedLessons() {
+            const selectedLessons = document.querySelectorAll('input[type="checkbox"][id^="lesson_"]:checked');
+            const startMixedExamBtn = document.getElementById('startMixedExamBtn');
+            const selectAllCheckbox = document.getElementById('selectAllLessons');
+            const allLessons = document.querySelectorAll('input[type="checkbox"][id^="lesson_"]');
+            
+            // Update select all checkbox state
+            if (selectedLessons.length === 0) {
+                selectAllCheckbox.indeterminate = false;
+                selectAllCheckbox.checked = false;
+            } else if (selectedLessons.length === allLessons.length) {
+                selectAllCheckbox.indeterminate = false;
+                selectAllCheckbox.checked = true;
+            } else {
+                selectAllCheckbox.indeterminate = true;
+            }
+            
+            // Update button state and text
+            if (selectedLessons.length === 0) {
+                startMixedExamBtn.disabled = true;
+                startMixedExamBtn.textContent = '🎯 เริ่มสอบรวม';
+            } else if (selectedLessons.length === 1) {
+                startMixedExamBtn.disabled = false;
+                startMixedExamBtn.textContent = '🎯 เริ่มสอบ (1 บท)';
+            } else {
+                startMixedExamBtn.disabled = false;
+                startMixedExamBtn.textContent = `🎯 เริ่มสอบรวม (${selectedLessons.length} บท)`;
+            }
+        }
+
+        // Start single lesson exam
+        async function startSingleExam(lessonId, lessonTitle, questionCount) {
+            if (questionCount === 0) {
+                alert('ยังไม่มีโจทย์ในบทเรียนนี้');
+                return;
+            }
+            
+            try {
+                const snapshot = await window.dbGet(window.dbChild(window.dbRef(window.database), `lessons/${lessonId}/questions`));
+                const questionsData = snapshot.val() || {};
+                
+                questions = Object.keys(questionsData).map(id => ({
+                    id: id,
+                    lessonId: lessonId,
+                    lessonTitle: lessonTitle,
+                    ...questionsData[id]
+                }));
+
+                // Shuffle questions and choices
+                questions = shuffleArray(questions);
+                questions = questions.map(question => shuffleChoices(question));
+
+                currentExam = { lessonId, lesson: { title: lessonTitle } };
+                currentQuestionIndex = 0;
+                userAnswers = new Array(questions.length).fill(null);
+
+                document.getElementById('studentDashboard').classList.add('hidden');
+                document.getElementById('examInterface').classList.remove('hidden');
+                document.getElementById('examTitle').textContent = lessonTitle;
+                document.getElementById('totalQuestions').textContent = questions.length;
+
+                showQuestion();
+            } catch (error) {
+                console.error('Error starting single exam:', error);
+                alert('เกิดข้อผิดพลาดในการเริ่มสอบ');
+            }
+        }
+
+        // Start mixed exam from selected lessons
+        async function startMixedExam() {
+            const selectedLessons = document.querySelectorAll('input[type="checkbox"][id^="lesson_"]:checked');
+            
+            if (selectedLessons.length === 0) {
+                alert('กรุณาเลือกบทเรียนอย่างน้อย 1 บท');
+                return;
+            }
+
+            try {
+                questions = [];
+                const lessonTitles = [];
+
+                for (const checkbox of selectedLessons) {
+                    const lessonId = checkbox.value;
+                    const snapshot = await window.dbGet(window.dbChild(window.dbRef(window.database), `lessons/${lessonId}`));
+                    const lessonData = snapshot.val();
+                    
+                    if (lessonData && lessonData.questions) {
+                        lessonTitles.push(lessonData.title);
+                        
+                        Object.keys(lessonData.questions).forEach(questionId => {
+                            questions.push({
+                                id: questionId,
+                                lessonId: lessonId,
+                                lessonTitle: lessonData.title,
+                                ...lessonData.questions[questionId]
+                            });
+                        });
+                    }
+                }
+
+                if (questions.length === 0) {
+                    alert('ไม่มีโจทย์ในบทเรียนที่เลือก');
+                    return;
+                }
+
+                // Shuffle questions randomly and shuffle choices
+                questions = shuffleArray(questions);
+                questions = questions.map(question => shuffleChoices(question));
+
+                currentExam = { 
+                    mixed: true, 
+                    lesson: { title: `สอบรวม: ${lessonTitles.join(', ')}` } 
+                };
+                currentQuestionIndex = 0;
+                userAnswers = new Array(questions.length).fill(null);
+
+                document.getElementById('studentDashboard').classList.add('hidden');
+                document.getElementById('examInterface').classList.remove('hidden');
+                document.getElementById('examTitle').textContent = currentExam.lesson.title;
+                document.getElementById('totalQuestions').textContent = questions.length;
+
+                showQuestion();
+            } catch (error) {
+                console.error('Error starting mixed exam:', error);
+                alert('เกิดข้อผิดพลาดในการเริ่มสอบ');
+            }
+        }
+
+        // Shuffle array function
+        function shuffleArray(array) {
+            const shuffled = [...array];
+            for (let i = shuffled.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+            }
+            return shuffled;
+        }
+
+        // Shuffle choices and update correct answer index
+        function shuffleChoices(question) {
+            const originalCorrectAnswer = question.correctAnswer;
+            const originalCorrectChoice = question.choices[originalCorrectAnswer];
+            
+            // Create array of choice indices and shuffle them
+            const indices = [0, 1, 2, 3];
+            const shuffledIndices = shuffleArray(indices);
+            
+            // Reorder choices based on shuffled indices
+            const shuffledChoices = shuffledIndices.map(index => question.choices[index]);
+            
+            // Find new position of correct answer
+            const newCorrectAnswer = shuffledIndices.indexOf(originalCorrectAnswer);
+            
+            return {
+                ...question,
+                choices: shuffledChoices,
+                correctAnswer: newCorrectAnswer
+            };
+        }
+
+        // Start exam (legacy function - kept for compatibility)
+        async function startExam(lessonId, lesson) {
+            try {
+                const snapshot = await window.dbGet(window.dbChild(window.dbRef(window.database), `lessons/${lessonId}/questions`));
+                const questionsData = snapshot.val() || {};
+                
+                questions = Object.keys(questionsData).map(id => ({
+                    id: id,
+                    ...questionsData[id]
+                }));
+
+                if (questions.length === 0) {
+                    alert('ยังไม่มีโจทย์ในบทเรียนนี้');
+                    return;
+                }
+
+                // Shuffle questions and choices
+                questions = shuffleArray(questions);
+                questions = questions.map(question => shuffleChoices(question));
+
+                currentExam = { lessonId, lesson };
+                currentQuestionIndex = 0;
+                userAnswers = new Array(questions.length).fill(null);
+
+                document.getElementById('studentDashboard').classList.add('hidden');
+                document.getElementById('examInterface').classList.remove('hidden');
+                document.getElementById('examTitle').textContent = lesson.title;
+                document.getElementById('totalQuestions').textContent = questions.length;
+
+                showQuestion();
+            } catch (error) {
+                console.error('Error starting exam:', error);
+                alert('เกิดข้อผิดพลาดในการเริ่มสอบ');
+            }
+        }
+
+        // Show current question
+        function showQuestion() {
+            const question = questions[currentQuestionIndex];
+            document.getElementById('currentQuestion').textContent = currentQuestionIndex + 1;
+            
+            const choicesHtml = question.choices.map((choice, index) => 
+                `<label class="flex items-center space-x-3 p-4 border-2 border-gray-200 rounded-lg cursor-pointer hover:bg-blue-50 hover:border-blue-300 transition-all duration-200 ${userAnswers[currentQuestionIndex] === index ? 'bg-blue-100 border-blue-400' : ''}">
+                    <input type="radio" name="answer" value="${index}" ${userAnswers[currentQuestionIndex] === index ? 'checked' : ''} onchange="selectAnswer(${index})" class="w-5 h-5 text-blue-600">
+                    <span class="text-gray-800 flex-1">${choice}</span>
+                </label>`
+            ).join('');
+
+            let questionHeader = `ข้อ ${currentQuestionIndex + 1}: ${question.question}`;
+            if (question.lessonTitle && currentExam.mixed) {
+                questionHeader += `<div class="text-sm text-blue-600 mt-2 font-medium">📚 ${question.lessonTitle}</div>`;
+            }
+
+            document.getElementById('questionContent').innerHTML = `
+                <div class="mb-6">
+                    <h3 class="text-xl font-medium text-gray-800 mb-6">${questionHeader}</h3>
+                    <div class="space-y-3">
+                        ${choicesHtml}
+                    </div>
+                </div>
+            `;
+
+            // Update navigation buttons
+            document.getElementById('prevBtn').disabled = currentQuestionIndex === 0;
+            
+            if (currentQuestionIndex === questions.length - 1) {
+                document.getElementById('nextBtn').classList.add('hidden');
+                document.getElementById('finishBtn').classList.remove('hidden');
+            } else {
+                document.getElementById('nextBtn').classList.remove('hidden');
+                document.getElementById('finishBtn').classList.add('hidden');
+            }
+        }
+
+        // Select answer
+        function selectAnswer(answerIndex) {
+            userAnswers[currentQuestionIndex] = answerIndex;
+        }
+
+        // Previous question
+        function previousQuestion() {
+            if (currentQuestionIndex > 0) {
+                currentQuestionIndex--;
+                showQuestion();
+            }
+        }
+
+        // Next question
+        function nextQuestion() {
+            if (currentQuestionIndex < questions.length - 1) {
+                currentQuestionIndex++;
+                showQuestion();
+            }
+        }
+
+        // Finish exam
+        function finishExam() {
+            let correctCount = 0;
+            const results = [];
+
+            questions.forEach((question, index) => {
+                const userAnswer = userAnswers[index];
+                const isCorrect = userAnswer === question.correctAnswer;
+                if (isCorrect) correctCount++;
+
+                results.push({
+                    questionNumber: index + 1,
+                    question: question.question,
+                    lessonTitle: question.lessonTitle,
+                    userAnswer: userAnswer !== null ? question.choices[userAnswer] : 'ไม่ได้ตอบ',
+                    correctAnswer: question.choices[question.correctAnswer],
+                    isCorrect: isCorrect
+                });
+            });
+
+            const score = Math.round((correctCount / questions.length) * 100);
+            showResults(score, correctCount, questions.length, results);
+        }
+
+        // Show results
+        function showResults(score, correctCount, totalQuestions, results) {
+            const wrongAnswers = results.filter(r => !r.isCorrect);
+            
+            let resultsHtml = `
+                <div class="text-center mb-6">
+                    <div class="text-4xl font-bold ${score >= 80 ? 'text-green-600' : score >= 60 ? 'text-yellow-600' : 'text-red-600'} mb-2">
+                        ${score}%
+                    </div>
+                    <p class="text-gray-600">ตอบถูก ${correctCount} ข้อ จากทั้งหมด ${totalQuestions} ข้อ</p>
+                </div>
+            `;
+
+            if (wrongAnswers.length > 0) {
+                resultsHtml += `
+                    <div class="text-left">
+                        <h4 class="text-lg font-semibold text-red-600 mb-4">❌ ข้อที่ตอบผิด:</h4>
+                        <div class="space-y-4">
+                `;
+
+                wrongAnswers.forEach(result => {
+                    let questionHeader = `ข้อ ${result.questionNumber}: ${result.question}`;
+                    if (result.lessonTitle && currentExam.mixed) {
+                        questionHeader = `ข้อ ${result.questionNumber} (${result.lessonTitle}): ${result.question}`;
+                    }
+                    
+                    resultsHtml += `
+                        <div class="p-4 bg-red-50 border border-red-200 rounded-lg">
+                            <p class="font-medium text-gray-800 mb-2">${questionHeader}</p>
+                            <p class="text-red-600 mb-1">คำตอบของคุณ: ${result.userAnswer}</p>
+                            <p class="text-green-600">คำตอบที่ถูกต้อง: ${result.correctAnswer}</p>
+                        </div>
+                    `;
+                });
+
+                resultsHtml += '</div></div>';
+            } else {
+                resultsHtml += '<div class="text-center text-green-600 font-semibold">🎉 ยินดีด้วย! คุณตอบถูกทุกข้อ</div>';
+            }
+
+            document.getElementById('resultsContent').innerHTML = resultsHtml;
+            document.getElementById('resultsModal').classList.remove('hidden');
+            document.getElementById('resultsModal').classList.add('flex');
+        }
+
+        // Back to dashboard
+        function backToDashboard() {
+            document.getElementById('resultsModal').classList.add('hidden');
+            document.getElementById('resultsModal').classList.remove('flex');
+            document.getElementById('examInterface').classList.add('hidden');
+            document.getElementById('studentDashboard').classList.remove('hidden');
+            loadLessons();
+        }
+    </script>
+<script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'969e7220a0bf7dc6',t:'MTc1NDMxNDYwOS4wMDAwMDA='};var a=document.createElement('script');a.nonce='';a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
+</html>
