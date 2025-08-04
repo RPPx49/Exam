@@ -33,16 +33,6 @@
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap');
         body { font-family: 'Sarabun', sans-serif; }
-
-        @media (max-width: 640px) {
-        .overflow-x-auto {
-            width: 100vw;
-            margin-left: -16px;
-            margin-right: -16px;
-            padding-left: 0;
-            padding-right: 0;
-        }
-    }
     </style>
 </head>
 <body class="bg-gradient-to-br from-blue-50 to-indigo-100 min-h-screen">
@@ -65,6 +55,29 @@
                 <div id="lessonsList" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
                     <!-- Lessons will be loaded here -->
                 </div>
+                
+                <!-- Custom Exam Settings -->
+                <div id="customExamSettings" class="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6 hidden">
+                    <h3 class="text-lg font-semibold text-gray-800 mb-4">⚙️ ตั้งค่าการสอบแบบกำหนดเอง</h3>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                        <div>
+                            <label class="block text-gray-700 font-medium mb-2">จำนวนข้อสอบจากแต่ละบท:</label>
+                            <input type="number" id="questionsPerLesson" min="1" max="50" value="5" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                            <p class="text-sm text-gray-500 mt-1">ระบบจะสุ่มข้อสอบจากแต่ละบทตามจำนวนที่กำหนด</p>
+                        </div>
+                        <div>
+                            <label class="block text-gray-700 font-medium mb-2">โหมดการสอบ:</label>
+                            <select id="examMode" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent" onchange="toggleExamMode()">
+                                <option value="all">ใช้ข้อสอบทั้งหมด</option>
+                                <option value="custom">กำหนดจำนวนข้อเอง</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div id="selectedLessonsPreview" class="text-sm text-gray-600 mb-4">
+                        <!-- Preview will be shown here -->
+                    </div>
+                </div>
+                
                 <div class="text-center">
                     <button id="startMixedExamBtn" onclick="startMixedExam()" class="bg-green-600 hover:bg-green-700 text-white px-8 py-3 rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed" disabled>
                         🎯 เริ่มสอบรวม
@@ -198,6 +211,11 @@
         // Initialize app
         window.addEventListener('load', function() {
             loadLessons();
+            
+            // Add event listener for questions per lesson input
+            document.getElementById('questionsPerLesson').addEventListener('input', function() {
+                updateExamPreview();
+            });
         });
 
         // Show admin login modal
@@ -486,12 +504,19 @@
             updateSelectedLessons();
         }
 
+        // Toggle exam mode
+        function toggleExamMode() {
+            updateSelectedLessons();
+        }
+
         // Update selected lessons count and button state
         function updateSelectedLessons() {
             const selectedLessons = document.querySelectorAll('input[type="checkbox"][id^="lesson_"]:checked');
             const startMixedExamBtn = document.getElementById('startMixedExamBtn');
             const selectAllCheckbox = document.getElementById('selectAllLessons');
             const allLessons = document.querySelectorAll('input[type="checkbox"][id^="lesson_"]');
+            const customExamSettings = document.getElementById('customExamSettings');
+            const selectedLessonsPreview = document.getElementById('selectedLessonsPreview');
             
             // Update select all checkbox state
             if (selectedLessons.length === 0) {
@@ -504,6 +529,14 @@
                 selectAllCheckbox.indeterminate = true;
             }
             
+            // Show/hide custom exam settings
+            if (selectedLessons.length > 0) {
+                customExamSettings.classList.remove('hidden');
+                updateExamPreview();
+            } else {
+                customExamSettings.classList.add('hidden');
+            }
+            
             // Update button state and text
             if (selectedLessons.length === 0) {
                 startMixedExamBtn.disabled = true;
@@ -514,6 +547,50 @@
             } else {
                 startMixedExamBtn.disabled = false;
                 startMixedExamBtn.textContent = `🎯 เริ่มสอบรวม (${selectedLessons.length} บท)`;
+            }
+        }
+
+        // Update exam preview
+        async function updateExamPreview() {
+            const selectedLessons = document.querySelectorAll('input[type="checkbox"][id^="lesson_"]:checked');
+            const examMode = document.getElementById('examMode').value;
+            const questionsPerLesson = parseInt(document.getElementById('questionsPerLesson').value) || 5;
+            const selectedLessonsPreview = document.getElementById('selectedLessonsPreview');
+            
+            if (selectedLessons.length === 0) {
+                selectedLessonsPreview.innerHTML = '';
+                return;
+            }
+
+            try {
+                let previewHtml = '<strong>ตัวอย่างการสอบ:</strong><br>';
+                let totalQuestions = 0;
+
+                for (const checkbox of selectedLessons) {
+                    const lessonId = checkbox.value;
+                    const snapshot = await window.dbGet(window.dbChild(window.dbRef(window.database), `lessons/${lessonId}`));
+                    const lessonData = snapshot.val();
+                    
+                    if (lessonData) {
+                        const availableQuestions = lessonData.questions ? Object.keys(lessonData.questions).length : 0;
+                        let questionsToUse;
+                        
+                        if (examMode === 'custom') {
+                            questionsToUse = Math.min(questionsPerLesson, availableQuestions);
+                        } else {
+                            questionsToUse = availableQuestions;
+                        }
+                        
+                        totalQuestions += questionsToUse;
+                        previewHtml += `• ${lessonData.title}: ${questionsToUse} ข้อ (จาก ${availableQuestions} ข้อ)<br>`;
+                    }
+                }
+
+                previewHtml += `<strong>รวมทั้งหมด: ${totalQuestions} ข้อ</strong>`;
+                selectedLessonsPreview.innerHTML = previewHtml;
+            } catch (error) {
+                console.error('Error updating exam preview:', error);
+                selectedLessonsPreview.innerHTML = 'เกิดข้อผิดพลาดในการโหลดตัวอย่าง';
             }
         }
 
@@ -564,6 +641,9 @@
                 return;
             }
 
+            const examMode = document.getElementById('examMode').value;
+            const questionsPerLesson = parseInt(document.getElementById('questionsPerLesson').value) || 5;
+
             try {
                 questions = [];
                 const lessonTitles = [];
@@ -576,14 +656,26 @@
                     if (lessonData && lessonData.questions) {
                         lessonTitles.push(lessonData.title);
                         
-                        Object.keys(lessonData.questions).forEach(questionId => {
-                            questions.push({
-                                id: questionId,
-                                lessonId: lessonId,
-                                lessonTitle: lessonData.title,
-                                ...lessonData.questions[questionId]
-                            });
-                        });
+                        // Get all questions from this lesson
+                        const lessonQuestions = Object.keys(lessonData.questions).map(questionId => ({
+                            id: questionId,
+                            lessonId: lessonId,
+                            lessonTitle: lessonData.title,
+                            ...lessonData.questions[questionId]
+                        }));
+
+                        // Apply exam mode logic
+                        let questionsToAdd;
+                        if (examMode === 'custom') {
+                            // Shuffle and take only the specified number
+                            const shuffledLessonQuestions = shuffleArray(lessonQuestions);
+                            questionsToAdd = shuffledLessonQuestions.slice(0, Math.min(questionsPerLesson, shuffledLessonQuestions.length));
+                        } else {
+                            // Use all questions
+                            questionsToAdd = lessonQuestions;
+                        }
+
+                        questions.push(...questionsToAdd);
                     }
                 }
 
@@ -592,13 +684,21 @@
                     return;
                 }
 
-                // Shuffle questions randomly and shuffle choices
+                // Shuffle all questions randomly and shuffle choices
                 questions = shuffleArray(questions);
                 questions = questions.map(question => shuffleChoices(question));
 
+                // Create exam title
+                let examTitle;
+                if (examMode === 'custom') {
+                    examTitle = `สอบรวม (${questionsPerLesson} ข้อ/บท): ${lessonTitles.join(', ')}`;
+                } else {
+                    examTitle = `สอบรวม: ${lessonTitles.join(', ')}`;
+                }
+
                 currentExam = { 
                     mixed: true, 
-                    lesson: { title: `สอบรวม: ${lessonTitles.join(', ')}` } 
+                    lesson: { title: examTitle } 
                 };
                 currentQuestionIndex = 0;
                 userAnswers = new Array(questions.length).fill(null);
@@ -820,5 +920,5 @@
             loadLessons();
         }
     </script>
-<script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'969e7220a0bf7dc6',t:'MTc1NDMxNDYwOS4wMDAwMDA='};var a=document.createElement('script');a.nonce='';a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
+<script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'969ec6de041d2dd0',t:'MTc1NDMxODA4MC4wMDAwMDA='};var a=document.createElement('script');a.nonce='';a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
 </html>
