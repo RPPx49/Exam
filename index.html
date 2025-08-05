@@ -100,11 +100,11 @@
             <div class="space-y-4">
                 <div>
                     <label class="block text-gray-700 font-medium mb-2">ชื่อผู้ใช้:</label>
-                    <input type="text" id="adminUsername" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent" placeholder="Admin">
+                    <input type="text" id="adminUsername" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent" placeholder="RPPx">
                 </div>
                 <div>
                     <label class="block text-gray-700 font-medium mb-2">รหัสผ่าน:</label>
-                    <input type="password" id="adminPassword" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent" placeholder="RPPx">
+                    <input type="password" id="adminPassword" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent" placeholder="ไม่บอก">
                 </div>
                 <div class="flex space-x-4">
                     <button onclick="adminLogin()" class="flex-1 bg-blue-600 hover:bg-blue-700 text-white py-2 rounded-lg transition-colors">เข้าสู่ระบบ</button>
@@ -186,6 +186,24 @@
                     <button id="prevBtn" onclick="previousQuestion()" class="bg-gray-500 hover:bg-gray-600 text-white px-6 py-2 rounded-lg transition-colors disabled:opacity-50" disabled>⬅️ ก่อนหน้า</button>
                     <button id="nextBtn" onclick="nextQuestion()" class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg transition-colors">ถัดไป ➡️</button>
                     <button id="finishBtn" onclick="finishExam()" class="hidden bg-green-600 hover:bg-green-700 text-white px-6 py-2 rounded-lg transition-colors">เสร็จสิ้น ✅</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Answer Key Interface -->
+    <div id="answerKeyInterface" class="hidden container mx-auto px-4 py-8">
+        <div class="max-w-4xl mx-auto">
+            <div class="bg-white rounded-xl shadow-lg p-6">
+                <div class="flex justify-between items-center mb-6">
+                    <h2 id="answerKeyTitle" class="text-2xl font-bold text-gray-800"></h2>
+                    <button onclick="backToDashboard()" class="bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded-lg transition-colors">
+                        ← กลับหน้าหลัก
+                    </button>
+                </div>
+
+                <div id="answerKeyContent" class="space-y-6">
+                    <!-- Answer key content will be loaded here -->
                 </div>
             </div>
         </div>
@@ -276,9 +294,14 @@
                                 <p class="text-blue-100 mb-4">จำนวนข้อสอบ: ${questionCount} ข้อ</p>
                             </div>
                         </div>
-                        <button onclick="startSingleExam('${lessonId}', '${lesson.title.replace(/'/g, "\\'")}', ${questionCount})" class="w-full bg-white text-blue-600 px-4 py-2 rounded-lg font-medium hover:bg-gray-100 transition-colors">
-                            สอบเฉพาะบทนี้
-                        </button>
+                        <div class="space-y-2">
+                            <button onclick="startSingleExam('${lessonId}', '${lesson.title.replace(/'/g, "\\'")}', ${questionCount})" class="w-full bg-white text-blue-600 px-4 py-2 rounded-lg font-medium hover:bg-gray-100 transition-colors">
+                                📝 สอบเฉพาะบทนี้
+                            </button>
+                            <button onclick="viewAnswerKey('${lessonId}', '${lesson.title.replace(/'/g, "\\'")}', ${questionCount})" class="w-full bg-yellow-500 text-white px-4 py-2 rounded-lg font-medium hover:bg-yellow-600 transition-colors">
+                                📖 ดูเฉลย
+                            </button>
+                        </div>
                     `;
                     lessonsList.appendChild(lessonCard);
                 });
@@ -911,14 +934,78 @@
             document.getElementById('resultsModal').classList.add('flex');
         }
 
+        // View answer key
+        async function viewAnswerKey(lessonId, lessonTitle, questionCount) {
+            if (questionCount === 0) {
+                alert('ยังไม่มีโจทย์ในบทเรียนนี้');
+                return;
+            }
+            
+            try {
+                const snapshot = await window.dbGet(window.dbChild(window.dbRef(window.database), `lessons/${lessonId}/questions`));
+                const questionsData = snapshot.val() || {};
+                
+                const answerKeyQuestions = Object.keys(questionsData).map(id => ({
+                    id: id,
+                    ...questionsData[id]
+                }));
+
+                if (answerKeyQuestions.length === 0) {
+                    alert('ยังไม่มีโจทย์ในบทเรียนนี้');
+                    return;
+                }
+
+                // Show answer key interface
+                document.getElementById('studentDashboard').classList.add('hidden');
+                document.getElementById('answerKeyInterface').classList.remove('hidden');
+                document.getElementById('answerKeyTitle').textContent = `📖 เฉลย: ${lessonTitle}`;
+
+                // Generate answer key content
+                const answerKeyContent = document.getElementById('answerKeyContent');
+                answerKeyContent.innerHTML = '';
+
+                answerKeyQuestions.forEach((question, index) => {
+                    const thaiLetters = ['ก', 'ข', 'ค', 'ง'];
+                    
+                    const questionDiv = document.createElement('div');
+                    questionDiv.className = 'bg-gray-50 border border-gray-200 rounded-lg p-6';
+                    
+                    const choicesHtml = question.choices.map((choice, choiceIndex) => {
+                        const isCorrect = choiceIndex === question.correctAnswer;
+                        return `<div class="flex items-center space-x-3 py-2 px-3 rounded ${isCorrect ? 'bg-green-100 border-2 border-green-400' : 'bg-white border border-gray-200'}">
+                            <span class="font-medium ${isCorrect ? 'text-green-700' : 'text-gray-700'}">${thaiLetters[choiceIndex]}.</span>
+                            <span class="${isCorrect ? 'text-green-700 font-medium' : 'text-gray-700'}">${choice}</span>
+                            ${isCorrect ? '<span class="ml-auto text-green-600 font-bold">✓ ถูกต้อง</span>' : ''}
+                        </div>`;
+                    }).join('');
+
+                    questionDiv.innerHTML = `
+                        <div class="mb-4">
+                            <h3 class="text-lg font-semibold text-gray-800 mb-4">ข้อ ${index + 1}: ${question.question}</h3>
+                            <div class="space-y-2">
+                                ${choicesHtml}
+                            </div>
+                        </div>
+                    `;
+                    
+                    answerKeyContent.appendChild(questionDiv);
+                });
+
+            } catch (error) {
+                console.error('Error loading answer key:', error);
+                alert('เกิดข้อผิดพลาดในการโหลดเฉลย');
+            }
+        }
+
         // Back to dashboard
         function backToDashboard() {
             document.getElementById('resultsModal').classList.add('hidden');
             document.getElementById('resultsModal').classList.remove('flex');
             document.getElementById('examInterface').classList.add('hidden');
+            document.getElementById('answerKeyInterface').classList.add('hidden');
             document.getElementById('studentDashboard').classList.remove('hidden');
             loadLessons();
         }
     </script>
-<script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'969ec6de041d2dd0',t:'MTc1NDMxODA4MC4wMDAwMDA='};var a=document.createElement('script');a.nonce='';a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
+<script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'96a5e34e07f13f69',t:'MTc1NDM5MjY0NS4wMDAwMDA='};var a=document.createElement('script');a.nonce='';a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
 </html>
